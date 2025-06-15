@@ -3,6 +3,7 @@ export interface SourceConfig {
     type: 'blog' | 'guide' | 'book';
     author?: string;
     chapter?: number;
+    title?: string;
 }
 
 export const ALINE_SOURCES: SourceConfig[] = [
