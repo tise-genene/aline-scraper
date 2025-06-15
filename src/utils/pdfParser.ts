@@ -1,5 +1,9 @@
 import { access, constants, readFile } from 'fs/promises';
 import * as pdfParse from 'pdf-parse';
+import type { Options, Result } from 'pdf-parse';
+
+// Use the function directly from the module
+const parsePdf = pdfParse.default;
 
 interface PdfParseResult {
     text: string;
@@ -22,7 +26,7 @@ export class PdfParser {
             
             // Parse PDF
             console.log('Starting PDF parsing...');
-            const result = await pdfParse(dataBuffer);
+            const result = await parsePdf(dataBuffer);
             console.log('PDF parsing completed successfully');
             return result.text;
         } catch (error: any) {
@@ -46,7 +50,7 @@ export class PdfParser {
     static async parsePdfBuffer(buffer: Buffer): Promise<string> {
         try {
             console.log('Starting PDF parsing from buffer...');
-            const result = await pdfParse(buffer);
+            const result = await parsePdf(buffer);
             console.log('PDF parsing completed successfully');
             return result.text;
         } catch (error) {
