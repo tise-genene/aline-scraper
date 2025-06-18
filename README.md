@@ -1,6 +1,6 @@
 # Aline's Knowledgebase Scraper
 
-A specialized tool for scraping technical content into Aline's knowledgebase.
+A specialized tool for scraping technical content into knowledgebase.
 
 A TypeScript-based tool for scraping knowledgebase content from various sources into a structured JSON format.
 
