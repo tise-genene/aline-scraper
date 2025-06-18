@@ -1,9 +1,7 @@
-import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { type Config } from '../types.js';
+import { join, dirname } from 'path';
+import { type Config } from '../types';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = join(__filename, '..');
+const __dirname = dirname(__filename);
 
 export const CONFIG: Config = {
     OUTPUT_DIR: join(__dirname, '..', 'output'),

@@ -1,5 +1,6 @@
-import { NewAlineScraper } from '../scrapers/newAlineScraper';
+import { GenericScraper } from '../scrapers/genericScraper';
 import { ALINE_SOURCES, BOOK_CHAPTERS } from '../config/alineSources';
+import { access, constants } from 'fs/promises';
 
 async function main() {
     const [teamId, userId, pdfPath] = process.argv.slice(2);
@@ -15,11 +16,20 @@ async function main() {
     console.log(`User ID: ${userId}`);
     if (pdfPath) {
         console.log(`PDF Path: ${pdfPath}`);
+        try {
+            // Verify PDF file exists
+            await access(pdfPath, constants.R_OK);
+            console.log('PDF file exists and is readable');
+        } catch (error: any) {
+            console.error(`Error accessing PDF file: ${error.message}`);
+            process.exit(1);
+        }
     }
 
-    const scraper = new NewAlineScraper({
+    const scraper = new GenericScraper({
         teamId,
         userId,
+        sources: ALINE_SOURCES,
         pdfPath: pdfPath || undefined
     });
 
