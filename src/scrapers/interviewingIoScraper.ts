@@ -1,4 +1,4 @@
-import { BaseScraper } from './baseScraper';
+import { BaseScraper } from './BaseScraper';
 import { KnowledgeItem, ScraperConfig } from '../types';
 import { marked } from 'marked';
 import axios from 'axios';

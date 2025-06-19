@@ -1,4 +1,4 @@
-import { BaseScraper } from './baseScraper.js';
+import { BaseScraper } from './BaseScraper';
 import { KnowledgeItem, ScraperConfig } from '../types.js';
 import { chromium } from 'playwright';
 import { CONFIG } from '../config/config.js';

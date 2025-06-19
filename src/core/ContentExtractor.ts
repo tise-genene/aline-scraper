@@ -1,159 +1,185 @@
 import { chromium } from 'playwright';
+import pdfParse from 'pdf-parse';
 import { ContentExtractor as ContentExtractorInterface } from '../types/index';
+import { JSDOM } from 'jsdom';
+import { readFile } from 'fs/promises';
 
-export interface IContentExtractor extends ContentExtractorInterface {}
+export interface IContentExtractor extends ContentExtractorInterface {
+    setSelectors(selectors: string[]): void;
+    extractPDF(filePath: string): Promise<string>;
+    analyzeContentStructure(html: string): Promise<{
+        mainContent: string;
+        headings: string[];
+        paragraphs: string[];
+    }>;
+}
 
 export class ContentExtractor implements IContentExtractor {
     private browser: any | null = null;
     private page: any | null = null;
+    private selectors: string[] = [
+        'article',
+        'div.content',
+        'div.post-content',
+        'div.entry-content',
+        'main',
+        'div.article-content',
+        'div#content',
+        'div.post',
+        'section.content',
+        'div.post-body',
+        'div.entry-content-single',
+        'div.post-content-single'
+    ];
+
+    setSelectors(selectors: string[]): void {
+        this.selectors = selectors;
+    }
 
     async extract(url: string): Promise<string> {
         try {
             console.log(`Starting content extraction for ${url}`);
-            
-            // Configure browser with longer timeout
-            const browser = await chromium.launch({
-                timeout: 60000, // 60 seconds
-                headless: true
-            });
-            
-            const context = await browser.newContext();
-            this.page = await context.newPage();
-            
-            // Set page timeout
-            await this.page.setDefaultTimeout(60000);
-            
             console.log(`Navigating to ${url}`);
+            
+            if (!this.browser) {
+                this.browser = await chromium.launch({
+                    timeout: 60000, // 60 seconds
+                    headless: true
+                });
+            }
+            if (!this.page) {
+                const context = await this.browser.newContext();
+                this.page = await context.newPage();
+                await this.page.setDefaultTimeout(60000);
+            }
+
             await this.page.goto(url, {
                 waitUntil: 'networkidle',
                 timeout: 60000
             });
+
+            console.log('Page loaded, analyzing content structure');
+            const { mainContent } = await this.analyzeContentStructure(await this.page.content());
             
-            console.log(`Page loaded, extracting content`);
-            const content = await this.extractContent();
-            
-            console.log(`Content extraction complete. Length: ${content.length} characters`);
-            return content.trim();
-        } catch (error: any) {
-            console.error(`Error extracting content from ${url}: ${error.message}`);
-            console.error(`Error details: ${error.stack}`);
-            await this.closeBrowser();
-            return '';
+            if (!mainContent.trim()) {
+                console.log('No main content found, trying fallback selectors');
+                return this.tryFallbackSelectors();
+            }
+
+            console.log('Main content found');
+            return mainContent;
+        } catch (error) {
+            console.error('Error extracting content:', error);
+            throw error;
         } finally {
-            await this.closeBrowser();
+            if (this.page) {
+                await this.page.close();
+                this.page = null;
+            }
         }
     }
 
-    private async extractContent(): Promise<string> {
-        let content = '';
-        
-        // Try main selectors first
-        const mainSelectors = [
-            'article',
-            'div.content',
-            'div.post-content',
-            'div.entry-content',
-            'main',
-            'div.article-content',
-            'div#content',
-            'div.post',
-            'section.content',
-            'div.post-body',
-            'div.entry-content-single',
-            'div.post-content-single',
-            'div.article-content-single'
-        ];
-        
-        // 2. Try heading-based content
-        const headingSelectors = 'h1, h2, h3, h4, h5, h6, p';
-        
-        // 3. Try blog post specific selectors
-        const blogSelectors = [
-            'div.post-body',
-            'div.post-content',
-            'div.article',
-            'div.entry',
-            'div.content',
-            'div.post-content-single',
-            'div.entry-content-single',
-            'div.article-content-single'
-        ];
-        
-        // Try main selectors first
-        for (const selector of mainSelectors) {
-            console.log(`Trying selector: ${selector}`);
-            const element = await this.page.$(selector);
-            if (element) {
-                const text = await element.textContent();
-                if (text?.trim()) {
-                    content = text.trim();
-                    console.log(`Found content using selector: ${selector}`);
-                    break;
-                }
-            }
-        }
-        
-        // If no content found, try heading-based approach
-        if (!content) {
-            console.log('No content found, trying heading-based extraction...');
-            const headingElements = await this.page.$$(headingSelectors);
-            if (headingElements.length > 0) {
-                console.log(`Found ${headingElements.length} heading elements`);
-                for (const element of headingElements) {
-                    const text = await element.textContent();
-                    if (text?.trim()) {
-                        content += text.trim() + '\n\n'; // Add double newline for better readability
-                    }
-                }
-            }
-        }
-        
-        // If still no content, try blog post selectors
-        if (!content) {
-            console.log('No content found, trying blog post selectors...');
-            for (const selector of blogSelectors) {
-                console.log(`Trying selector: ${selector}`);
-                const element = await this.page.$(selector);
+    private async tryFallbackSelectors(): Promise<string> {
+        console.log('Trying fallback selectors');
+        for (const selector of this.selectors) {
+            const content = await this.page.evaluate((sel: string) => {
+                const element = document.querySelector(sel);
                 if (element) {
-                    const text = await element.textContent();
-                    if (text?.trim()) {
-                        content = text.trim();
-                        console.log(`Found content using selector: ${selector}`);
-                        break;
-                    }
+                    return element.textContent?.trim() || '';
                 }
+                return '';
+            }, selector);
+
+            if (content.trim()) {
+                console.log(`Content found with selector: ${selector}`);
+                return content;
             }
         }
-        
-        if (!content) {
-            console.log('No content found using standard selectors, trying fallback...');
-            // Try a fallback approach - get all visible text
-            const allText = await this.page.evaluate(() => {
-                const body = document.body;
-                if (!body) return '';
-                const text = body.textContent || '';
-                // Remove extra whitespace and newlines
-                return text.replace(/\s+/g, ' ').trim();
-            });
-            content = allText.trim();
-        }
-        
-        // Clean up content
-        content = content
-            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-            .replace(/\n\s+/g, '\n') // Remove extra spaces after newlines
-            .trim();
-        
-        return content;
+        return '';
     }
 
-    private async closeBrowser(): Promise<void> {
-        if (this.browser) {
-            try {
-                await this.browser.close();
-            } catch (error: any) {
-                console.error(`Error closing browser: ${error}`);
+    async analyzeContentStructure(html: string): Promise<{
+        mainContent: string;
+        headings: string[];
+        paragraphs: string[];
+    }> {
+        try {
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Find main content area
+            const mainContent = this.findMainContent(document);
+            
+            // Extract headings
+            const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
+                .map((h: Element) => h.textContent?.trim())
+                .filter((text: string | undefined) => typeof text === 'string' && text.trim())
+                .slice(0, 5) as string[]; // Limit to top 5 headings
+
+            // Extract paragraphs
+            const paragraphs = Array.from(document.querySelectorAll('p'))
+                .map((p: Element) => p.textContent?.trim())
+                .filter((text: string | undefined) => typeof text === 'string' && text.trim())
+                .slice(0, 10) as string[]; // Limit to top 10 paragraphs
+
+            return {
+                mainContent: mainContent || '',
+                headings,
+                paragraphs
+            };
+        } catch (error) {
+            console.error('Error analyzing content structure:', error);
+            throw error;
+        }
+    }
+
+    private findMainContent(document: Document): string {
+        // Try to find main content based on semantic HTML
+        const mainElements = [
+            document.querySelector('main'),
+            document.querySelector('article'),
+            document.querySelector('div.content'),
+            document.querySelector('div.post-content'),
+            document.querySelector('div.entry-content')
+        ];
+
+        for (const element of mainElements) {
+            if (element && element.textContent?.trim()) {
+                return element.textContent.trim();
             }
+        }
+
+        // If no semantic elements found, try to find largest text block
+        const textBlocks = Array.from(document.querySelectorAll('div, article, section'))
+            .map(element => ({
+                element,
+                textLength: element.textContent?.trim().length || 0
+            }))
+            .filter(block => block.textLength > 500) // Minimum length for main content
+            .sort((a, b) => b.textLength - a.textLength);
+
+        return textBlocks[0]?.element.textContent?.trim() || '';
+    }
+
+    async extractPDF(filePath: string): Promise<string> {
+        try {
+            const buffer = await readFile(filePath);
+            const data = await pdfParse(buffer);
+            return data.text || '';
+        } catch (error) {
+            console.error('Error extracting PDF:', error);
+            throw error;
+        }
+    }
+
+    async extractContent(url: string): Promise<string> {
+        return this.extract(url);
+    }
+
+    async closeBrowser(): Promise<void> {
+        if (this.browser) {
+            await this.browser.close();
+            this.browser = null;
         }
     }
 }

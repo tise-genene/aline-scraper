@@ -1,5 +1,5 @@
-import { ScraperConfig, ContentItem, ContentType } from '../types/index';
-import { ContentExtractor } from './ContentExtractor';
+import { ScraperConfig, ContentItem, ContentType, Chapter } from '../types/index';
+import { IContentExtractor } from './ContentExtractor';
 import { SmartContentProcessor } from './ContentProcessor';
 import { SmartChapterSplitter } from './ChapterSplitter';
 
@@ -10,61 +10,49 @@ export abstract class Scraper {
         this.config = config;
     }
 
-    protected createContentExtractor(): ContentExtractor {
-        return new ContentExtractor();
-    }
+    protected abstract createContentExtractor(): IContentExtractor;
 
     protected createContentProcessor(): SmartContentProcessor {
-        return new SmartContentProcessor();
+        return new SmartContentProcessor(this.config.baseUrl, {
+            title: this.config.title,
+            type: this.config.type,
+            url: this.config.baseUrl,
+            author: this.config.author
+        });
     }
 
     protected createChapterSplitter(): SmartChapterSplitter {
         return new SmartChapterSplitter();
     }
 
-    protected getContentExtractor(): ContentExtractor {
-        return this.createContentExtractor();
-    }
-
-    protected getContentProcessor(): SmartContentProcessor {
-        return this.createContentProcessor();
-    }
-
-    protected getChapterSplitter(): SmartChapterSplitter {
-        return this.createChapterSplitter();
-    }
-
     protected async scrape(): Promise<ContentItem[]> {
         try {
-            const contentExtractor = this.getContentExtractor();
-            const content = await contentExtractor.extract(this.config.baseUrl);
-            const contentProcessor = this.getContentProcessor();
-            const processedContent = contentProcessor.process(content);
+            const extractor = this.createContentExtractor();
+            const content = await extractor.extract(this.config.baseUrl);
+            const processor = this.createContentProcessor();
+            const processedContent = await processor.process(content);
             
-            if (this.config.type === 'book') {
-                const chapterSplitter = this.getChapterSplitter();
-                return this.splitIntoChapters(processedContent, chapterSplitter);
-            }
+            const splitter = this.createChapterSplitter();
+            const chapters = splitter.split(processedContent);
             
-            return [this.createContentItem(processedContent)];
+            return chapters.length > 0 
+                ? chapters.map((chapter: Chapter) => this.createContentItem(chapter.content, chapter.title))
+                : [this.createContentItem(processedContent)];
         } catch (error) {
             console.error(`Error scraping ${this.config.baseUrl}:`, error);
             return [];
         }
     }
 
-    protected splitIntoChapters(content: string, chapterSplitter: SmartChapterSplitter): ContentItem[] {
-        const chapters = chapterSplitter.split(content);
-        return chapters.map(chapter => this.createContentItem(chapter.content, chapter.title));
-    }
-
     protected createContentItem(content: string, title?: string): ContentItem {
         return {
-            title: title || this.config.baseUrl,
+            title: title || this.config.title || this.config.baseUrl,
             content,
             content_type: this.config.type,
             source_url: this.config.baseUrl,
-            author: this.config.author || ''
+            author: this.config.author || '',
+            user_id: this.config.user_id || '',
+            team_id: this.config.team_id || ''
         };
     }
 }
