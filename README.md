@@ -1,78 +1,108 @@
-# Aline's Knowledgebase Scraper
+# Knowledgebase Scraper Framework
 
-A specialized tool for scraping technical content into knowledgebase.
-
-A TypeScript-based tool for scraping knowledgebase content from various sources into a structured JSON format.
+A scalable and extensible TypeScript framework for scraping and processing content into a structured knowledgebase format.
 
 ## Features
 
-- Specialized scrapers for each content source:
-  - Interviewing.io blog posts
-  - Interviewing.io company guides
-  - Interviewing.io interview guides
-  - Nil Mamano's DS&A blog
-  - PDF chapters (up to 8 chapters)
-- Modular architecture with base scraper class
-- HTML to Markdown conversion for consistent output
-- PDF chapter splitting with heuristic detection
-- Detailed error handling and debug logging
-- CLI interface for easy execution
+- Scalable architecture with abstract base classes
+- Modular pipeline for content processing:
+  - Content extraction
+  - Content processing
+  - Chapter splitting
+- Built-in implementations:
+  - Web content scraper
+  - PDF scraper
+- Fully typed with TypeScript
+- Extensible interface design
+- Error handling and logging
 
-## Setup
+## Usage
+
+### Installation
 
 1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Configure sources in `src/config/sources.ts`
+### Creating a Scraper
 
-2. Run the scraper:
-```bash
-npm run aline -- aline123 aline_user [pdfPath]
+1. Extend the base `Scraper` class:
+```typescript
+import { Scraper } from './core/Scraper';
+import { ScraperConfig } from './types/index';
+
+export class MyScraper extends Scraper {
+    constructor(config: ScraperConfig) {
+        super(config);
+    }
+
+    protected createContentExtractor() {
+        // Implement content extraction
+    }
+
+    protected createContentProcessor() {
+        // Implement content processing
+    }
+
+    protected createChapterSplitter() {
+        // Implement chapter splitting
+    }
+}
 ```
 
-Example:
-```bash
-npm run aline -- aline123 aline_user "path/to/aline-book.pdf"
+### Running a Scraper
+
+```typescript
+const config = {
+    baseUrl: 'https://example.com',
+    type: 'blog',
+    title: 'Example Blog Post',
+    author: 'John Doe',
+    user_id: 'user123',
+    team_id: 'team456'
+};
+
+const scraper = new MyScraper(config);
+const result = await scraper.scrape();
 ```
 
 ## Project Structure
 
 ```
 src/
-├── config/        # Configuration files
-├── scrapers/      # Individual scraper implementations
-├── utils/         # Utility functions
-├── pdf/           # PDF processing
-└── index.ts       # Main entry point
+├── core/          # Core framework classes
+│   ├── Scraper.ts         # Base scraper class
+│   ├── ContentExtractor.ts # Content extraction interface
+│   ├── ContentProcessor.ts # Content processing interface
+│   └── ChapterSplitter.ts  # Chapter splitting interface
+├── scrapers/      # Concrete scraper implementations
+│   ├── WebScraper.ts
+│   └── PDFScraper.ts
+├── types/         # TypeScript interfaces
+└── test/          # Test files
 ```
 
-## Output
+## Output Format
 
-The tool generates a JSON file in `output/aline_knowledge.json` with the following structure:
+The scraper returns an array of `ContentItem` objects:
 
-```json
-{
-  "team_id": "aline123",
-  "items": [
-    {
-      "title": "Item Title",
-      "content": "Markdown content",
-      "content_type": "blog|guide|book",
-      "source_url": "source-url",
-      "author": "author-name",
-      "user_id": "user-id"
-    }
-  ]
+```typescript
+interface ContentItem {
+    title: string;
+    content: string;
+    content_type: ContentType;
+    source_url: string;
+    author: string;
+    user_id: string;
+    team_id: string;
 }
 ```
 
 ## Technologies Used
 
 - TypeScript
-- Axios
-- Cheerio
-- pdf-parse
-- marked
-- yargs (CLI argument parsing)
+- Playwright (for web scraping)
+- JSDOM (for HTML processing)
+- pdf-parse (for PDF processing)
+- marked (for markdown conversion)
